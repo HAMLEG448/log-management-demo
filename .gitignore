@@ -49,3 +49,7 @@ Thumbs.db
 # =========================
 
 certbot/
+
+# Python
+__pycache__/
+*.pyc
