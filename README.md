@@ -2,7 +2,7 @@
 
 A multi-source Log Management System built with React, Go, PostgreSQL, and Docker.
 
-The system collects logs from multiple sources, normalizes them into a common schema, stores them in PostgreSQL, and provides log search, dashboards, alerts, authentication, tenant isolation, and automatic log retention.
+The system collects logs from multiple sources, normalizes them into a common schema, stores them in PostgreSQL, and provides log search, dashboards, alerts, authentication, role-based access control, tenant isolation, and automatic log retention.
 
 The project supports two deployment modes:
 
@@ -11,70 +11,105 @@ The project supports two deployment modes:
 
 ---
 
-## Features
+# Features
 
-### Log Sources
+## Log Sources
 
-The demo supports four ingestible log sources:
+The system currently supports four ingestible demo sources:
 
 | Source | Ingestion Method |
 |---|---|
 | REST API | HTTP JSON |
 | Firewall / Network Device | Syslog UDP |
-| Active Directory / Windows | HTTP JSON |
+| Active Directory / Windows Security | HTTP JSON |
 | AWS CloudTrail | File Batch Upload |
 
-### Log Management
+Supported ingestion methods:
 
-- Common normalized log schema
-- PostgreSQL storage
+```text
+HTTP JSON
+Syslog UDP
+File Batch Upload
+```
+
+---
+
+## Log Management
+
+The system provides:
+
+- Centralized normalized log storage
+- PostgreSQL persistence
 - Text search
-- Tenant filter
-- Source filter
-- Event type filter
-- User filter
-- Time-range filter
+- Tenant filtering
+- Source filtering
+- Event type filtering
+- User filtering
+- Time-range filtering
 
-### Dashboard
+---
 
-- Total logs
-- Timeline
-- Top source IPs
-- Top users
-- Top event types
+## Dashboard
+
+The dashboard provides:
+
+- Total Logs
+- Log Timeline
+- Top Source IPs
+- Top Users
+- Top Event Types
 - Tenant filtering
 
-### Alerting
+---
 
-Current demo rule:
+## Alerts
+
+Current demo alert rule:
 
 **Repeated Failed Login**
 
-An alert is generated when at least three failed login events from the same source IP occur within five minutes.
+An alert is generated when at least three failed login events from the same source IP are detected within five minutes.
 
-### Authentication and RBAC
+Example failed-login event types:
 
-Supported roles:
+```text
+app_login_failed
+LogonFailed
+```
 
-- Admin
-- Viewer
+Generated alerts are stored in PostgreSQL and displayed on the Alerts page.
 
-Admin users can view multiple tenants.
+---
 
-Viewer users are restricted to the tenant assigned to their account.
+## Authentication and RBAC
 
-### Tenant Isolation
+The system supports two roles:
+
+```text
+Admin
+Viewer
+```
+
+Admin users can view data from multiple tenants.
+
+Viewer users are restricted to their assigned tenant.
+
+Authentication uses JWT tokens and passwords are stored as bcrypt hashes.
+
+---
+
+## Tenant Isolation
 
 Tenant isolation is enforced by the backend.
 
-For example, if:
+For example:
 
 ```text
 viewerA
 tenant = demoA
 ```
 
-requests:
+Even if the Viewer manually sends:
 
 ```text
 GET /logs?tenant=demoB
@@ -86,26 +121,40 @@ the backend still applies:
 tenant = demoA
 ```
 
-### Log Retention
+The frontend also hides the tenant selector for Viewer accounts.
 
-Default retention period:
+Detailed documentation:
 
-```text
-7 days
-```
+- [Tenant Isolation](docs/tenant-isolation.md)
 
-Configuration:
+---
+
+## Log Retention
+
+The backend contains an automatic log retention worker.
+
+Default configuration:
 
 ```env
 LOG_RETENTION_DAYS=7
 RETENTION_CHECK_INTERVAL_MINUTES=60
 ```
 
-Expired logs are automatically deleted by the backend retention worker.
+Logs older than the configured retention period are automatically removed.
+
+The retention worker:
+
+```text
+runs immediately when the backend starts
++
+runs again at the configured interval
+```
+
+Retention was also verified on the cloud deployment by inserting an expired log and confirming that the worker removed it from PostgreSQL.
 
 ---
 
-## Architecture
+# Architecture
 
 ```mermaid
 flowchart TD
@@ -116,7 +165,7 @@ flowchart TD
     AD[Active Directory / Windows]
     AWS[AWS CloudTrail]
 
-    NGINX[Nginx + React]
+    NGINX[Nginx + React Frontend]
     BACKEND[Go Backend]
     DB[(PostgreSQL)]
     ALERT[Alert Engine]
@@ -127,13 +176,14 @@ flowchart TD
 
     API -->|HTTP JSON| BACKEND
     AD -->|HTTP JSON| BACKEND
-    AWS -->|File Upload| BACKEND
+    AWS -->|File Batch| BACKEND
     FW -->|Syslog UDP 514| BACKEND
 
     BACKEND --> DB
     BACKEND --> ALERT
     ALERT --> DB
-    RETENTION --> DB
+
+    RETENTION -->|Delete expired logs| DB
 ```
 
 More details:
@@ -144,9 +194,9 @@ More details:
 
 ---
 
-## Tech Stack
+# Tech Stack
 
-### Frontend
+## Frontend
 
 - React
 - TypeScript
@@ -155,17 +205,17 @@ More details:
 - Axios
 - Vite
 
-### Backend
+## Backend
 
 - Go
 - Gin
 - GORM
 
-### Database
+## Database
 
 - PostgreSQL
 
-### Deployment
+## Deployment
 
 - Docker
 - Docker Compose
@@ -176,7 +226,7 @@ More details:
 
 ---
 
-## Project Structure
+# Project Structure
 
 ```text
 log-management-demo/
@@ -197,7 +247,13 @@ log-management-demo/
 │   └── main.go
 │
 ├── frontend/
+│   ├── public/
 │   ├── src/
+│   │   ├── api/
+│   │   ├── component/
+│   │   ├── contexts/
+│   │   ├── pages/
+│   │   └── types/
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   ├── package.json
@@ -206,7 +262,9 @@ log-management-demo/
 ├── docs/
 │   ├── architecture.md
 │   ├── data-flow.md
-│   └── tenant-isolation.md
+│   ├── tenant-isolation.md
+│   ├── setup_appliance.md
+│   └── setup_saas.md
 │
 ├── samples/
 │   └── aws_cloudtrail.json
@@ -216,13 +274,21 @@ log-management-demo/
 └── README.md
 ```
 
-Setup documentation for Appliance and SaaS deployments is provided separately under `docs/`.
+---
+
+# Documentation
+
+- [System Architecture](docs/architecture.md)
+- [Data Flow](docs/data-flow.md)
+- [Tenant Isolation](docs/tenant-isolation.md)
+- [Appliance Deployment Guide](docs/setup_appliance.md)
+- [SaaS Deployment Guide](docs/setup_saas.md)
 
 ---
 
-## Normalized Log Schema
+# Normalized Log Schema
 
-Supported logs are converted into a common structure.
+Logs from different sources are converted into a common schema.
 
 Main fields include:
 
@@ -252,30 +318,64 @@ raw
 created_at
 ```
 
-Different sources populate different subsets of these fields.
+Different log sources populate different subsets of these fields.
+
+Examples:
+
+```text
+Firewall
+→ source/destination IP
+→ source/destination port
+→ protocol
+→ action
+
+Active Directory
+→ event ID
+→ event type
+→ user
+→ host
+→ logon type
+
+AWS CloudTrail
+→ cloud account
+→ cloud region
+→ cloud service
+→ event type
+→ user
+
+REST API
+→ generic application event information
+```
 
 ---
 
-## API Overview
+# API Overview
 
-### Public Endpoints
+When accessed through Nginx, the public HTTP endpoints use the `/api` prefix.
+
+## Public Endpoints
 
 ```http
-GET /health
-POST /auth/login
-POST /ingest
-POST /ingest/ad
-POST /ingest/aws-file
+GET  /api/health
+POST /api/auth/login
+
+POST /api/ingest
+POST /api/ingest/ad
+POST /api/ingest/aws-file
 ```
 
-### Protected Endpoints
+The ingestion endpoints are intentionally simple for this demo and currently do not require an ingestion API key.
 
-These endpoints require a JWT token:
+---
+
+## Protected Endpoints
+
+The following endpoints require authentication:
 
 ```http
-GET /logs
-GET /dashboard
-GET /alerts
+GET /api/logs
+GET /api/dashboard
+GET /api/alerts
 ```
 
 Header:
@@ -286,7 +386,9 @@ Authorization: Bearer <JWT_TOKEN>
 
 ---
 
-## Example REST Ingestion
+# REST API Ingestion
+
+Example:
 
 ```json
 {
@@ -302,18 +404,28 @@ Authorization: Bearer <JWT_TOKEN>
 Endpoint:
 
 ```http
-POST /ingest
-```
-
-When accessed through Nginx:
-
-```http
 POST /api/ingest
 ```
 
+The backend normalizes:
+
+```text
+ip
+```
+
+into:
+
+```text
+src_ip
+```
+
+before storage.
+
 ---
 
-## Active Directory Example
+# Active Directory Ingestion
+
+Example:
 
 ```json
 {
@@ -336,7 +448,7 @@ POST /api/ingest/ad
 
 ---
 
-## AWS CloudTrail File Batch
+# AWS CloudTrail File Batch
 
 Sample file:
 
@@ -344,7 +456,7 @@ Sample file:
 samples/aws_cloudtrail.json
 ```
 
-Upload endpoint:
+Endpoint:
 
 ```http
 POST /api/ingest/aws-file
@@ -357,9 +469,11 @@ curl -X POST http://localhost/api/ingest/aws-file \
   -F "file=@samples/aws_cloudtrail.json"
 ```
 
+The backend accepts AWS JSON file data, normalizes the events, and stores them in PostgreSQL.
+
 ---
 
-## Syslog Ingestion
+# Syslog Ingestion
 
 External Syslog port:
 
@@ -367,7 +481,7 @@ External Syslog port:
 UDP 514
 ```
 
-Internal backend listener:
+Internal Go listener:
 
 ```text
 UDP 5514
@@ -377,7 +491,8 @@ Docker mapping:
 
 ```text
 Host UDP 514
-      ↓
+      |
+      v
 Backend UDP 5514
 ```
 
@@ -387,11 +502,133 @@ Example Syslog message:
 vendor=demo product=ngfw action=deny src=10.0.1.10 dst=8.8.8.8 spt=5353 dpt=53 proto=udp
 ```
 
+The Syslog parser extracts fields such as:
+
+```text
+vendor
+product
+action
+src_ip
+dst_ip
+src_port
+dst_port
+protocol
+```
+
+---
+
+# Demo Tenants
+
+The demo currently uses:
+
+```text
+demoA
+demoB
+```
+
+Example distribution:
+
+```text
+demoA
+├── REST API
+├── Firewall
+└── Active Directory
+
+demoB
+└── AWS CloudTrail
+```
+
+---
+
+# Demo Accounts
+
+Demo account configuration is controlled using environment variables.
+
+Example:
+
+```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-this-password
+
+VIEWER_USERNAME=viewerA
+VIEWER_PASSWORD=change-this-password
+```
+
+Example values are available in:
+
+```text
+backend/.env.example
+```
+
+The live SaaS credentials are not stored in the public repository.
+
+Credentials can be provided separately to the evaluator when required.
+
+---
+
+# Environment Variables
+
+## Root Environment
+
+Create:
+
+```text
+.env
+```
+
+Example:
+
+```env
+POSTGRES_PASSWORD=change-this-password
+```
+
+## Backend Environment
+
+Create:
+
+```text
+backend/.env
+```
+
+Example:
+
+```env
+DB_HOST=db
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=change-this-password
+DB_NAME=log_management
+
+JWT_SECRET=change-this-to-a-long-random-secret
+
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-this-admin-password
+
+VIEWER_USERNAME=viewerA
+VIEWER_PASSWORD=change-this-viewer-password
+
+LOG_RETENTION_DAYS=7
+RETENTION_CHECK_INTERVAL_MINUTES=60
+```
+
+Real `.env` files and production secrets must not be committed to Git.
+
 ---
 
 # Appliance Deployment
 
-The complete system can run on a single machine or VM.
+The complete application can run on a single machine or virtual machine using Docker Compose.
+
+Recommended environment:
+
+```text
+Ubuntu Server 22.04+
+4 vCPU
+8 GB RAM
+40 GB disk
+Docker Engine
+Docker Compose
+```
 
 Services:
 
@@ -401,55 +638,7 @@ backend
 db
 ```
 
-Recommended environment:
-
-```text
-Ubuntu Server 22.04+
-4 vCPU
-8 GB RAM
-40 GB disk
-```
-
-## Environment Configuration
-
-Create root environment file:
-
-```bash
-cp .env.example .env
-```
-
-Example:
-
-```env
-POSTGRES_PASSWORD=change-this-password
-```
-
-Create backend environment file:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-Configure values such as:
-
-```env
-JWT_SECRET=change-this-secret
-
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=change-this-password
-
-VIEWER_USERNAME=viewerA
-VIEWER_PASSWORD=change-this-password
-
-LOG_RETENTION_DAYS=7
-RETENTION_CHECK_INTERVAL_MINUTES=60
-```
-
-Real secrets must not be committed to Git.
-
-## Start
-
-Run from the project root:
+Start from the project root:
 
 ```bash
 docker compose up -d --build
@@ -461,13 +650,13 @@ Check:
 docker compose ps
 ```
 
-Open:
+Local web application:
 
 ```text
 http://localhost
 ```
 
-Health check:
+Health endpoint:
 
 ```text
 http://localhost/api/health
@@ -481,27 +670,15 @@ Expected response:
 }
 ```
 
-## Stop
+Detailed instructions:
 
-```bash
-docker compose down
-```
-
-This preserves PostgreSQL data.
-
-Do not use:
-
-```bash
-docker compose down -v
-```
-
-unless the database volume should also be deleted.
+- [Appliance Deployment Guide](docs/setup_appliance.md)
 
 ---
 
 # SaaS Deployment
 
-The project has also been deployed on Google Cloud.
+The project has also been deployed on Google Cloud Compute Engine.
 
 Current environment:
 
@@ -522,7 +699,7 @@ Static public IPv4:
 35.247.183.116
 ```
 
-SaaS URL while the VM is running:
+Public SaaS URL while the VM is running:
 
 ```text
 https://35.247.183.116
@@ -532,15 +709,15 @@ Public entry points:
 
 | Port | Protocol | Purpose |
 |---|---|---|
-| 80 | TCP | HTTP redirect / certificate challenge |
+| 80 | TCP | HTTP redirect / ACME challenge |
 | 443 | TCP | HTTPS Web UI and API |
 | 514 | UDP | Syslog ingestion |
 
-HTTP traffic is redirected to HTTPS.
+HTTP requests are redirected to HTTPS.
 
-HTTPS is terminated by Nginx using a Let's Encrypt certificate managed with Certbot.
+HTTPS is terminated by Nginx using a Let's Encrypt certificate managed by Certbot.
 
-Cloud request flow:
+Cloud flow:
 
 ```text
 Internet
@@ -560,52 +737,17 @@ Go Backend
 PostgreSQL
 ```
 
----
+Detailed instructions:
 
-## Demo Tenants
-
-The demo currently uses:
-
-```text
-demoA
-demoB
-```
-
-Example source distribution:
-
-```text
-demoA
-├── REST API
-├── Firewall
-└── Active Directory
-
-demoB
-└── AWS CloudTrail
-```
+- [SaaS Deployment Guide](docs/setup_saas.md)
 
 ---
 
-## Demo Accounts
-
-Demo usernames and passwords are configured using environment variables.
-
-Example configuration is available in:
-
-```text
-backend/.env.example
-```
-
-The live SaaS passwords are intentionally not stored in the public repository.
-
-Credentials can be provided separately to the evaluator when required.
-
----
-
-## Testing
+# Testing
 
 Backend tests include both unit and integration tests.
 
-**Directory:**
+Directory:
 
 ```text
 backend/
@@ -617,161 +759,158 @@ Run:
 go test ./... -v -count=1
 ```
 
-Current tests include:
+Current normalization tests include:
 
 ```text
 TestNormalizeAWSLog
 TestNormalizeLogMapsFields
 TestNormalizeLogParsesTimestamp
 TestNormalizeLogUsesCurrentTimeWhenTimestampMissing
+```
 
+Current integration tests include:
+
+```text
 TestHealthEndpoint
 TestAdminLogin
 TestViewerTenantIsolation
 ```
 
-The tenant isolation integration test verifies that a Viewer cannot access data from another tenant by modifying query parameters.
+The tenant isolation test verifies that a Viewer cannot access another tenant by manually changing query parameters.
 
 ---
 
-## Retention Verification
+# Retention Verification
 
-The retention worker runs immediately when the backend starts and then continues at the configured interval.
-
-Cloud verification was performed by:
+Cloud retention verification was performed by:
 
 ```text
-1. Creating a log older than the 7-day retention period
-2. Confirming that the log was ingested
+1. Creating a log older than the seven-day retention period
+2. Confirming that the ingestion API accepted the event
 3. Allowing the retention worker to run
-4. Confirming that the worker deleted one expired log
-5. Confirming that the expired row no longer existed in PostgreSQL
+4. Confirming that one expired log was deleted
+5. Querying PostgreSQL
+6. Confirming that the expired log no longer existed
 ```
 
 ---
 
-## Security
+# Security
 
-Implemented controls:
+Implemented security controls include:
 
-- HTTPS / TLS on SaaS deployment
+- HTTPS / TLS on the SaaS deployment
 - JWT authentication
 - bcrypt password hashing
-- Admin and Viewer roles
+- Admin / Viewer RBAC
 - Backend tenant isolation
 - Google Cloud firewall rules
-- PostgreSQL not exposed publicly
+- PostgreSQL not directly exposed publicly
 - Environment secrets excluded from Git
-- Strong credentials for the live SaaS deployment
+- Strong credentials for the live SaaS environment
 
-The current ingestion endpoints are intentionally simple for the demo.
+The project is a demonstration system.
 
-Additional production hardening would include:
+Additional production hardening should include:
 
 - Login rate limiting
-- API keys or authentication for ingestion endpoints
-- Secret Manager
-- More restrictive Syslog firewall source ranges
-- Audit logging
+- Authentication or API keys for ingestion endpoints
+- Cloud secret management
+- More restrictive Syslog source ranges
 - Database least-privilege users
+- Audit logging
 
 ---
 
-## Current Verification Status
+# Verification Status
 
-### Sources
+## Log Sources
 
 - [x] REST API
 - [x] Firewall / Syslog
 - [x] Active Directory
 - [x] AWS CloudTrail
 
-### Ingestion
+## Ingestion
 
 - [x] HTTP JSON
 - [x] Syslog UDP
 - [x] File Batch
 
-### Log Management
+## Log Management
 
 - [x] Normalized schema
 - [x] PostgreSQL storage
 - [x] Search
-- [x] Filters
+- [x] Tenant filter
+- [x] Source filter
+- [x] Event type filter
+- [x] User filter
+- [x] Time filter
 
-### Dashboard
+## Dashboard
 
+- [x] Total Logs
 - [x] Timeline
 - [x] Top IP
 - [x] Top Users
 - [x] Top Event Types
 
-### Alerts
+## Alerts
 
 - [x] Repeated failed login rule
 - [x] Alert storage
 - [x] Alerts UI
 
-### Security
+## Security
 
-- [x] JWT authentication
+- [x] Login
+- [x] JWT
+- [x] bcrypt password hashing
 - [x] Admin role
 - [x] Viewer role
 - [x] Tenant isolation
 - [x] HTTPS
 
-### Retention
+## Retention
 
-- [x] Configurable retention
+- [x] Configurable retention worker
 - [x] Default 7-day retention
 - [x] Cloud retention verification
 
-### Testing
+## Testing
 
 - [x] Unit tests
 - [x] Integration tests
-- [x] Tenant isolation test
+- [x] Tenant isolation integration test
 
-### Deployment
+## Deployment
 
-- [x] Docker Compose Appliance
-- [x] Google Cloud SaaS
+- [x] Backend Dockerfile
+- [x] Frontend Dockerfile
+- [x] Nginx
+- [x] Docker Compose
+- [x] PostgreSQL volume
+- [x] Appliance deployment
+- [x] Google Cloud SaaS deployment
 - [x] Static public IP
 - [x] HTTPS public URL
 
 ---
 
-## Documentation
+# Future Improvements
 
-Current documentation:
-
-```text
-docs/
-├── architecture.md
-├── data-flow.md
-└── tenant-isolation.md
-```
-
-Additional setup guides:
-
-```text
-setup_appliance.md
-setup_saas.md
-```
-
-will be added under `docs/`.
-
----
-
-## Future Improvements
+Possible improvements include:
 
 - Login rate limiting
 - Ingestion API authentication
 - GeoIP enrichment
 - Additional alert rules
-- Webhook / email notifications
+- Webhook notifications
+- Email notifications
+- Database indexing optimization
 - CI/CD pipeline
 - Infrastructure as Code
-- Database indexing optimization
 - Kubernetes deployment
 - Advanced audit logging
+- Improved dashboard visualizations
